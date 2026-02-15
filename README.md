@@ -95,13 +95,15 @@ Then open:
 - `index.html` — page layout and containers
 - `styles.css` — small custom styles on top of Tailwind utility classes
 - `js/card-catalog.js` — card catalog payload (presets, benefits, earn rates)
+- `js/catalog-validation.js` — startup schema checks for card catalog data
+- `js/state.js` — localStorage load/save helpers for user state
 - `js/app.js` — rendering, state, and interaction logic
 
 ---
 
 ## Next Recommended Steps
 
-- Persist state to `localStorage`.
+- Expand persisted state with migration/versioning support.
 - Add statement upload parsing and category mapping.
 - Add confidence/accuracy labels for assumptions (e.g., estimated point valuation).
 - Add per-card settings (open date, renewal date, authorized users, effective fee adjustments).

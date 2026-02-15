@@ -1,14 +1,29 @@
 const CARD_PRESETS = Array.isArray(window.CARD_CATALOG) ? window.CARD_CATALOG : [];
+const catalogErrors = typeof window.validateCardCatalog === 'function' ? window.validateCardCatalog(CARD_PRESETS) : [];
 if (!CARD_PRESETS.length) {
   console.error('Card catalog failed to load. Ensure js/card-catalog.js is included before js/app.js.');
 }
+if (catalogErrors.length) {
+  console.error('Card catalog validation failed:', catalogErrors);
+}
 
-const selectedCards = new Set();
-const usageState = {};
-const spendState = {};
-const benefitMetaState = {};
+const initialState = typeof window.loadAppState === 'function' ? window.loadAppState() : null;
+const selectedCards = new Set(Array.isArray(initialState?.selectedCards) ? initialState.selectedCards : []);
+const usageState = initialState?.usageState && typeof initialState.usageState === 'object' ? initialState.usageState : {};
+const spendState = initialState?.spendState && typeof initialState.spendState === 'object' ? initialState.spendState : {};
+const benefitMetaState = initialState?.benefitMetaState && typeof initialState.benefitMetaState === 'object' ? initialState.benefitMetaState : {};
 let isCardPickerOpen = false;
 let activeBrand = '';
+
+function persistState() {
+  if (typeof window.saveAppState !== 'function') return;
+  window.saveAppState({
+    selectedCards: Array.from(selectedCards),
+    usageState,
+    spendState,
+    benefitMetaState,
+  });
+}
 
 const presetsEl = document.getElementById('card-presets');
 const chartEl = document.getElementById('chart');
@@ -156,6 +171,7 @@ function renderBrandCardOptions() {
         ensureCardState(card);
       }
 
+      persistState();
       renderPresets();
       renderAll();
       renderBrandCardOptions();
@@ -211,6 +227,7 @@ function renderPresets() {
 
       button.addEventListener('click', () => {
         selectedCards.delete(card.id);
+        persistState();
         renderPresets();
         renderAll();
       });
@@ -394,6 +411,7 @@ function renderBenefitPanels(cards) {
       const maxPeriods = eligible ? benefit.periodsPerYear : 0;
       const current = usageState[cardId][benefitId] || 0;
       usageState[cardId][benefitId] = Math.max(0, Math.min(maxPeriods, current + delta));
+      persistState();
       renderAll();
     });
   });
@@ -406,6 +424,7 @@ function renderBenefitPanels(cards) {
       const benefit = card.benefits.find((item) => item.id === benefitId);
       const value = Math.max(benefit.minValuePerPeriod, Math.min(benefit.maxValuePerPeriod, Number(input.value) || benefit.valuePerPeriod));
       benefitMetaState[cardId][benefitId].valuePerPeriod = value;
+      persistState();
       renderAll();
     });
   });
@@ -416,6 +435,7 @@ function renderBenefitPanels(cards) {
       const benefitId = input.dataset.benefitId;
       const year = Number(input.value) || '';
       benefitMetaState[cardId][benefitId].lastClaimYear = year;
+      persistState();
       renderAll();
     });
   });
@@ -438,6 +458,7 @@ function renderBenefitPanels(cards) {
 
       const cards = CARD_PRESETS.filter((item) => selectedCards.has(item.id));
       renderChart(cards);
+      persistState();
     });
   });
 }
@@ -676,6 +697,7 @@ async function handleStatementUpload(event) {
   }
 
   renderAll();
+  persistState();
   event.target.value = '';
 }
 

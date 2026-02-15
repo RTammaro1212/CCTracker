@@ -110,4 +110,4 @@ window.CARD_CATALOG = [
       { id: 'csp-other', label: 'All other eligible purchases', multiplier: 1 },
     ],
   },
-];;
+];
