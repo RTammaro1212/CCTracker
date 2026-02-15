@@ -7,7 +7,7 @@ const CARD_PRESETS = [
     color: 'bg-zinc-900',
     benefits: [
       { id: 'uber', name: 'Uber Cash', cadence: 'monthly', periodsPerYear: 12, valuePerPeriod: 15, maxAnnualValue: 200, note: '$15/month in Uber Cash plus extra $20 in December (up to $200/year).' },
-      { id: 'uberone', name: 'Uber One Membership Credit', cadence: 'monthly', periodsPerYear: 12, valuePerPeriod: 9.99, maxAnnualValue: 120, note: 'Uber One monthly credit (up to $120/year statement credits).' },
+      { id: 'uberone', name: 'Uber One Membership Credit', cadence: 'yearly', periodsPerYear: 1, valuePerPeriod: 96, maxAnnualValue: 96, note: 'Annual Uber One credit value of $96.' },
       { id: 'subscription', name: 'Streaming / Subscription Credit', cadence: 'monthly', periodsPerYear: 12, valuePerPeriod: 25, maxAnnualValue: 300, note: 'Eligible services include Disney+, Hulu, NYT, WSJ, YouTube Premium/TV and more.' },
       { id: 'hotel', name: 'Fine Hotels + Resorts / THC Credit', cadence: 'semi-annual', periodsPerYear: 2, valuePerPeriod: 150, maxAnnualValue: 300, note: 'Up to $300 total per year across two periods.' },
       { id: 'resy', name: 'Resy Credit', cadence: 'quarterly', periodsPerYear: 4, valuePerPeriod: 100, maxAnnualValue: 400, note: '$100 each quarter.' },
@@ -30,7 +30,9 @@ const CARD_PRESETS = [
     color: 'bg-sky-700',
     benefits: [
       { id: 'lyft', name: 'Lyft Credit', cadence: 'monthly', periodsPerYear: 12, valuePerPeriod: 10, maxAnnualValue: 120, note: '$10 monthly credit.' },
-      { id: 'doordash', name: 'DoorDash Credits', cadence: 'monthly', periodsPerYear: 12, valuePerPeriod: 25, maxAnnualValue: 300, note: 'Two $10 non-restaurant + one $5 restaurant credit each month.' },
+      { id: 'csr-dd-nonrest-1', name: 'DoorDash Non-Restaurant Credit #1', cadence: 'monthly', periodsPerYear: 12, valuePerPeriod: 10, maxAnnualValue: 120, note: '$10 monthly non-restaurant credit.', group: 'csr-doordash' },
+      { id: 'csr-dd-nonrest-2', name: 'DoorDash Non-Restaurant Credit #2', cadence: 'monthly', periodsPerYear: 12, valuePerPeriod: 10, maxAnnualValue: 120, note: '$10 monthly non-restaurant credit.', group: 'csr-doordash' },
+      { id: 'csr-dd-restaurant', name: 'DoorDash Restaurant Credit', cadence: 'monthly', periodsPerYear: 12, valuePerPeriod: 5, maxAnnualValue: 60, note: '$5 monthly restaurant credit.', group: 'csr-doordash' },
       { id: 'csr-dashpass', name: 'DashPass Membership Value', cadence: 'yearly', periodsPerYear: 1, valuePerPeriod: 96, maxAnnualValue: 96, note: 'Annual DashPass benefit value of $96.' },
       { id: 'tsa', name: 'TSA PreCheck / Global Entry', cadence: 'yearly', periodsPerYear: 1, valuePerPeriod: 120, maxAnnualValue: 120, cooldownYears: 4, note: 'Up to $85/$120 credit; add last-claim year to enforce 4-year cooldown.' },
       { id: 'peloton', name: 'Peloton Credit', cadence: 'monthly', periodsPerYear: 12, valuePerPeriod: 10, maxAnnualValue: 120, note: '$10 monthly credits.' },
@@ -267,6 +269,37 @@ function renderChart(cards) {
     .join('');
 }
 
+function renderSingleBenefitRow(card, benefit) {
+  const { eligible, yearsLeft } = getBenefitEligibility(benefit, card.id);
+  const allowedPeriods = eligible ? benefit.periodsPerYear : 0;
+  const usedPeriods = Math.min(usageState[card.id][benefit.id] || 0, allowedPeriods);
+  const unitValue = getBenefitValue(benefit, card.id);
+  const recoveredValue = Math.min(usedPeriods * unitValue, benefit.maxAnnualValue);
+  const disabledClass = eligible ? '' : 'opacity-50';
+
+  return `
+    <div class="rounded-xl border border-slate-100 p-3 ${disabledClass}">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <div class="text-sm font-bold text-slate-800">${benefit.name}</div>
+          <div class="mt-1 text-xs text-slate-500">${benefit.note}</div>
+          ${benefit.cooldownYears ? `<div class="mt-1 text-[11px] font-semibold ${eligible ? 'text-emerald-600' : 'text-amber-600'}">${eligible ? 'Eligible this year' : `Eligible in ${yearsLeft} year(s)`}</div>` : ''}
+        </div>
+        <span class="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">${benefit.cadence}</span>
+      </div>
+      ${benefit.variableValue ? `<div class="mt-2 grid grid-cols-2 gap-2"><label class="text-[11px] text-slate-500">Per-stay value</label><input type="number" min="${benefit.minValuePerPeriod}" max="${benefit.maxValuePerPeriod}" step="1" class="benefit-value-input rounded-lg border border-slate-200 px-2 py-1 text-sm font-semibold" data-card-id="${card.id}" data-benefit-id="${benefit.id}" value="${unitValue}" /></div>` : ''}
+      ${benefit.cooldownYears ? `<div class="mt-2 grid grid-cols-2 gap-2"><label class="text-[11px] text-slate-500">Last claim year</label><input type="number" min="2000" max="2100" step="1" class="benefit-last-claim-input rounded-lg border border-slate-200 px-2 py-1 text-sm font-semibold" data-card-id="${card.id}" data-benefit-id="${benefit.id}" value="${benefitMetaState[card.id][benefit.id].lastClaimYear}" placeholder="e.g. 2023" /></div>` : ''}
+      <div class="mt-3 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <button class="usage-btn rounded-lg border border-slate-200 px-2 py-1 text-sm font-bold text-slate-600" data-card-id="${card.id}" data-benefit-id="${benefit.id}" data-delta="-1">−</button>
+          <div class="min-w-[92px] text-center text-sm font-semibold text-slate-700">${usedPeriods}/${allowedPeriods} used</div>
+          <button class="usage-btn rounded-lg border border-slate-200 px-2 py-1 text-sm font-bold text-slate-600" data-card-id="${card.id}" data-benefit-id="${benefit.id}" data-delta="1">+</button>
+        </div>
+        <div class="text-sm font-bold text-indigo-600">${formatCurrency(recoveredValue)}</div>
+      </div>
+    </div>`;
+}
+
 function renderBenefitPanels(cards) {
   benefitPanelsEl.classList.remove('hidden');
 
@@ -277,37 +310,30 @@ function renderBenefitPanels(cards) {
       const pointsSummary = getPointsSummary(card);
 
       const benefitRows = hasBenefits
-        ? card.benefits
-            .map((benefit) => {
-              const { eligible, yearsLeft } = getBenefitEligibility(benefit, card.id);
-              const allowedPeriods = eligible ? benefit.periodsPerYear : 0;
-              const usedPeriods = Math.min(usageState[card.id][benefit.id] || 0, allowedPeriods);
-              const unitValue = getBenefitValue(benefit, card.id);
-              const recoveredValue = Math.min(usedPeriods * unitValue, benefit.maxAnnualValue);
-              const disabledClass = eligible ? '' : 'opacity-50';
-              return `
-              <div class="rounded-xl border border-slate-100 p-3 ${disabledClass}">
-                <div class="flex items-start justify-between gap-3">
-                  <div>
-                    <div class="text-sm font-bold text-slate-800">${benefit.name}</div>
-                    <div class="mt-1 text-xs text-slate-500">${benefit.note}</div>
-                    ${benefit.cooldownYears ? `<div class="mt-1 text-[11px] font-semibold ${eligible ? 'text-emerald-600' : 'text-amber-600'}">${eligible ? 'Eligible this year' : `Eligible in ${yearsLeft} year(s)`}</div>` : ''}
-                  </div>
-                  <span class="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">${benefit.cadence}</span>
-                </div>
-                ${benefit.variableValue ? `<div class="mt-2 grid grid-cols-2 gap-2"><label class="text-[11px] text-slate-500">Per-stay value</label><input type="number" min="${benefit.minValuePerPeriod}" max="${benefit.maxValuePerPeriod}" step="1" class="benefit-value-input rounded-lg border border-slate-200 px-2 py-1 text-sm font-semibold" data-card-id="${card.id}" data-benefit-id="${benefit.id}" value="${unitValue}" /></div>` : ''}
-                ${benefit.cooldownYears ? `<div class="mt-2 grid grid-cols-2 gap-2"><label class="text-[11px] text-slate-500">Last claim year</label><input type="number" min="2000" max="2100" step="1" class="benefit-last-claim-input rounded-lg border border-slate-200 px-2 py-1 text-sm font-semibold" data-card-id="${card.id}" data-benefit-id="${benefit.id}" value="${benefitMetaState[card.id][benefit.id].lastClaimYear}" placeholder="e.g. 2023" /></div>` : ''}
-                <div class="mt-3 flex items-center justify-between">
-                  <div class="flex items-center gap-2">
-                    <button class="usage-btn rounded-lg border border-slate-200 px-2 py-1 text-sm font-bold text-slate-600" data-card-id="${card.id}" data-benefit-id="${benefit.id}" data-delta="-1">−</button>
-                    <div class="min-w-[92px] text-center text-sm font-semibold text-slate-700">${usedPeriods}/${allowedPeriods} used</div>
-                    <button class="usage-btn rounded-lg border border-slate-200 px-2 py-1 text-sm font-bold text-slate-600" data-card-id="${card.id}" data-benefit-id="${benefit.id}" data-delta="1">+</button>
-                  </div>
-                  <div class="text-sm font-bold text-indigo-600">${formatCurrency(recoveredValue)}</div>
-                </div>
-              </div>`;
-            })
-            .join('')
+        ? (() => {
+            const grouped = new Map();
+            const ungrouped = [];
+
+            card.benefits.forEach((benefit) => {
+              if (benefit.group) {
+                if (!grouped.has(benefit.group)) grouped.set(benefit.group, []);
+                grouped.get(benefit.group).push(benefit);
+              } else {
+                ungrouped.push(benefit);
+              }
+            });
+
+            const ungroupedHtml = ungrouped.map((benefit) => renderSingleBenefitRow(card, benefit)).join('');
+            const groupedHtml = Array.from(grouped.entries()).map(([groupId, items]) => {
+              const title = groupId === 'csr-doordash' ? 'DoorDash Credits (track each credit separately)' : 'Grouped Benefits';
+              return `<details class="rounded-xl border border-slate-200 bg-slate-50 p-3" open>
+                <summary class="cursor-pointer list-none text-sm font-bold text-slate-700">${title}</summary>
+                <div class="mt-3 space-y-2">${items.map((benefit) => renderSingleBenefitRow(card, benefit)).join('')}</div>
+              </details>`;
+            }).join('');
+
+            return ungroupedHtml + groupedHtml;
+          })()
         : '<div class="rounded-xl border border-dashed border-slate-200 p-4 text-xs text-slate-400">Benefit template coming next for this card.</div>';
 
       const pointsRows = hasRates
