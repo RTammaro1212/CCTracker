@@ -382,55 +382,162 @@ function normalizeText(textValue) {
   return String(textValue || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function findOtherRateId(card) {
-  const otherRate = card.earnRates.find((rate) => /all other|everything else/.test(rate.label.toLowerCase()) || /-other$/.test(rate.id));
-  return otherRate ? otherRate.id : null;
+function normalizeMerchantName(rawMerchant) {
+  let merchant = normalizeText(rawMerchant);
+  merchant = merchant
+    .replace(/^(sq\s*\*|sq\*|tst\s*\*|tst\*|paypal\s*\*|pp\*|pos\s+purchase\s+)/, '')
+    .replace(/\s+#?\d+$/g, '')
+    .replace(/\s+store\s+\d+$/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return merchant;
 }
 
-function resolveRateForCategory(card, category) {
+function isGroceryLikeMerchant(merchant, categoryText) {
+  const sampleText = `${merchant} ${normalizeText(categoryText)}`;
+  const groceryKeywords = [
+    'grocery', 'supermarket', 'whole foods', 'trader joe', 'aldi', 'kroger', 'safeway',
+    'publix', 'sprouts', 'wegmans', 'costco', 'sam club', 'instacart', 'food lion',
+  ];
+
+  return groceryKeywords.some((word) => sampleText.includes(word));
+}
+
+function getBucketDefinitions(card) {
+  return card.earnRates.map((rate) => ({
+    id: rate.id,
+    label: rate.label,
+    normalizedLabel: normalizeText(rate.label),
+  }));
+}
+
+function findBucketByKeywords(bucketDefs, keywordSets) {
+  return bucketDefs.find((bucket) =>
+    keywordSets.some((keywords) => keywords.every((keyword) => bucket.normalizedLabel.includes(keyword))),
+  );
+}
+
+function findOtherRateId(card) {
+  const bucketDefs = getBucketDefinitions(card);
+  const catchall = findBucketByKeywords(bucketDefs, [
+    ['all', 'other'],
+    ['everything', 'else'],
+    ['other', 'eligible'],
+  ]);
+  return catchall ? catchall.id : (bucketDefs[0]?.id || null);
+}
+
+function resolveRateForCategory(card, category, merchant) {
+  const bucketDefs = getBucketDefinitions(card);
+  const catchallRateId = findOtherRateId(card);
   const normalizedCategory = normalizeText(category);
-  if (!normalizedCategory) return findOtherRateId(card);
+  const normalizedMerchant = normalizeMerchantName(merchant);
+
+  if (!bucketDefs.length) return null;
+
+  const exactByCategory = bucketDefs.find((bucket) => {
+    if (!normalizedCategory || normalizedCategory.length < 3) return false;
+    return bucket.normalizedLabel.includes(normalizedCategory) || normalizedCategory.includes(bucket.normalizedLabel);
+  });
+  if (exactByCategory) return exactByCategory.id;
+
+  if (normalizedCategory.includes('food') || normalizedCategory.includes('drink')) {
+    const groceryBucket = findBucketByKeywords(bucketDefs, [[ 'grocery' ], [ 'supermarket' ]]);
+    if (groceryBucket && isGroceryLikeMerchant(normalizedMerchant, normalizedCategory)) {
+      return groceryBucket.id;
+    }
+
+    const diningBucket = findBucketByKeywords(bucketDefs, [[ 'dining' ], [ 'restaurant' ]]);
+    if (diningBucket) return diningBucket.id;
+  }
 
   let bestRate = null;
   let bestScore = 0;
 
-  card.earnRates.forEach((rate) => {
-    const label = normalizeText(rate.label);
-    const tokens = label.split(' ').filter((token) => token.length > 3 && !['through', 'eligible', 'purchases', 'purchase', 'booked', 'directly', 'direct'].includes(token));
-    const score = tokens.reduce((sum, token) => (normalizedCategory.includes(token) ? sum + 1 : sum), 0);
+  bucketDefs.forEach((bucket) => {
+    const tokens = bucket.normalizedLabel.split(' ').filter((token) => token.length > 3 && !['through', 'eligible', 'purchases', 'purchase', 'booked', 'directly', 'direct', 'other'].includes(token));
+    const score = tokens.reduce((sum, token) => {
+      const matchText = `${normalizedCategory} ${normalizedMerchant}`;
+      return matchText.includes(token) ? sum + 1 : sum;
+    }, 0);
 
     if (score > bestScore) {
       bestScore = score;
-      bestRate = rate;
+      bestRate = bucket;
     }
   });
 
   if (bestRate && bestScore > 0) return bestRate.id;
-  return findOtherRateId(card);
+  return catchallRateId;
+}
+
+function parseCsvRowWithHeaderMap(rawHeader, cols) {
+  const header = rawHeader.map((h) => normalizeText(h));
+  const findIndex = (candidates) => header.findIndex((h) => candidates.some((candidate) => h.includes(candidate)));
+
+  const dateIndex = findIndex(['date', 'posted', 'transaction date']);
+  const merchantIndex = findIndex(['merchant', 'description', 'payee']);
+  const typeIndex = findIndex(['type', 'transaction type']);
+  const categoryIndex = findIndex(['category', 'mcc', 'group']);
+  const amountIndex = findIndex(['amount', 'total', 'charge', 'debit']);
+
+  return {
+    date: dateIndex >= 0 ? cols[dateIndex] : '',
+    merchant: merchantIndex >= 0 ? cols[merchantIndex] : '',
+    type: typeIndex >= 0 ? cols[typeIndex] : '',
+    category: categoryIndex >= 0 ? cols[categoryIndex] : '',
+    amount: amountIndex >= 0 ? cols[amountIndex] : '',
+    amountIndex,
+  };
+}
+
+function parseTransactionType(rawType) {
+  const normalizedType = normalizeText(rawType);
+  if (!normalizedType) return 'sale';
+  if (normalizedType.includes('payment')) return 'payment';
+  if (normalizedType.includes('return') || normalizedType.includes('refund') || normalizedType.includes('reversal')) return 'return';
+  if (normalizedType.includes('sale') || normalizedType.includes('purchase') || normalizedType.includes('debit')) return 'sale';
+  if (normalizedType.includes('adjustment') || normalizedType.includes('fee')) return 'skip';
+  return 'skip';
 }
 
 function applyStatementCsvToCard(card, csvText) {
   const lines = csvText.split(/\r?\n/).filter((line) => line.trim().length > 0);
   if (lines.length < 2) return { appliedRows: 0, totalRows: 0 };
 
-  const header = parseCSVLine(lines[0]).map((h) => normalizeText(h));
-  const amountIndex = header.findIndex((h) => ['amount', 'total', 'charge', 'debit'].includes(h));
-  const categoryIndex = header.findIndex((h) => ['category', 'merchant', 'description', 'memo', 'type'].includes(h));
+  ensureCardState(card);
 
-  if (amountIndex === -1 || categoryIndex === -1) return { appliedRows: 0, totalRows: lines.length - 1 };
+  card.earnRates.forEach((rate) => {
+    spendState[card.id][rate.id] = 0;
+  });
+
+  const rawHeader = parseCSVLine(lines[0]);
+  const header = rawHeader.map((h) => normalizeText(h));
+  const hasAmountColumn = header.some((h) => ['amount', 'total', 'charge', 'debit'].some((word) => h.includes(word)));
+  if (!hasAmountColumn) return { appliedRows: 0, totalRows: lines.length - 1 };
 
   let appliedRows = 0;
 
   for (let i = 1; i < lines.length; i += 1) {
     const cols = parseCSVLine(lines[i]);
-    const rawAmount = Number(String(cols[amountIndex] || '').replace(/[$,]/g, ''));
-    if (!Number.isFinite(rawAmount) || rawAmount <= 0) continue;
+    const row = parseCsvRowWithHeaderMap(rawHeader, cols);
 
-    const rateId = resolveRateForCategory(card, cols[categoryIndex]);
-    if (!rateId) continue;
+    if (row.amountIndex === -1) continue;
 
-    spendState[card.id][rateId] = (Number(spendState[card.id][rateId]) || 0) + rawAmount;
+    const magnitude = Math.abs(Number(String(row.amount || '').replace(/[$,]/g, '')));
+    if (!Number.isFinite(magnitude) || magnitude === 0) continue;
+
+    const txnType = parseTransactionType(row.type);
+    if (txnType === 'payment') continue;
+    if (txnType === 'skip') continue;
+
+    const bucketId = resolveRateForCategory(card, row.category, row.merchant) || findOtherRateId(card);
+    const signedAmount = txnType === 'return' ? -magnitude : magnitude;
+
+    spendState[card.id][bucketId] = (Number(spendState[card.id][bucketId]) || 0) + signedAmount;
     appliedRows += 1;
+
+    console.log(`[statement-import] ${txnType} | ${normalizeMerchantName(row.merchant) || 'unknown merchant'} | ${row.category || 'uncategorized'} | ${magnitude.toFixed(2)} | ${bucketId}`);
   }
 
   return { appliedRows, totalRows: lines.length - 1 };
