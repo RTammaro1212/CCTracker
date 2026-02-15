@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CardCompare - Credit Card Benefit Tracker</title>
+    <meta
+      name="description"
+      content="Track credit card annual fees against real benefit usage to see if each card is worth keeping."
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            },
+            boxShadow: {
+              card: '0 0 0 1px rgba(0,0,0,0.03), 0 2px 10px rgba(0,0,0,0.06)',
+            },
+          },
+        },
+      };
+    </script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="bg-[#F8F9FB] font-sans text-slate-800">
+    <main class="mx-auto min-h-screen w-full max-w-6xl px-4 pb-16 pt-8 sm:px-6 lg:px-8">
+      <section class="mb-8 rounded-3xl bg-white p-6 shadow-card sm:p-8">
+        <div class="mb-4 inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-indigo-700">
+          Home MVP
+        </div>
+        <h1 class="text-3xl font-black text-slate-900 sm:text-4xl">
+          Track your card benefits against annual fees.
+        </h1>
+        <p class="mt-3 max-w-3xl text-sm text-slate-500 sm:text-base">
+          Start with popular cards, check off benefit usage, and track points earned from spend categories. Instantly see how much of each annual fee you’ve earned back.
+        </p>
+      </section>
+
+      <section class="grid gap-6 lg:grid-cols-5">
+        <div class="rounded-3xl bg-white p-5 shadow-card lg:col-span-2">
+          <div class="mb-4 flex items-center justify-between">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400">Quick Add Cards</h2>
+            <button id="clear-cards" class="text-xs font-semibold text-slate-500 hover:text-red-500">Clear</button>
+          </div>
+          <div id="card-presets" class="grid grid-cols-2 gap-2"></div>
+
+          <div class="mt-5 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-4">
+            <p class="text-sm font-semibold text-slate-600">Track usage, not just ownership</p>
+            <p class="mt-1 text-xs text-slate-400">Select a card, open its panel, track credits used, and enter spend by earning category.</p>
+          </div>
+
+          <div class="mt-4 rounded-2xl border-2 border-dashed border-indigo-200 bg-indigo-50/40 p-4">
+            <div class="mb-2 flex items-center justify-between">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-700">Statement Upload (Beta)</h3>
+              <span class="text-[10px] font-semibold uppercase tracking-wider text-indigo-500">CSV + Screenshot</span>
+            </div>
+            <p class="text-xs text-slate-500">Upload a card statement export to auto-fill points-on-spend categories. Screenshot/PDF upload tile is available for future OCR parsing.</p>
+
+            <div class="mt-3 space-y-2">
+              <label for="statement-card-select" class="block text-[11px] font-bold uppercase tracking-wider text-slate-500">Target card</label>
+              <select id="statement-card-select" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800"></select>
+              <label class="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-white px-3 py-2 text-sm font-bold text-indigo-700 transition-colors hover:bg-indigo-50">
+                Upload statement / screenshot
+                <input id="statement-upload" type="file" accept=".csv,image/*,.pdf" class="hidden" />
+              </label>
+              <div id="statement-upload-status" class="rounded-lg bg-white/80 px-3 py-2 text-xs text-slate-500">No file uploaded yet.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-3xl bg-white p-5 shadow-card lg:col-span-3">
+          <div class="mb-4 flex items-center justify-between">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400">Annual Fee Recovery Snapshot</h2>
+            <div class="text-xs font-semibold text-slate-500">Based on checked benefits</div>
+          </div>
+
+          <div class="mb-5 grid grid-cols-3 gap-3">
+            <div class="rounded-2xl bg-slate-50 p-3">
+              <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Cards Selected</div>
+              <div id="metric-count" class="mt-1 text-2xl font-black text-slate-900">0</div>
+            </div>
+            <div class="rounded-2xl bg-slate-50 p-3">
+              <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Best Recovery</div>
+              <div id="metric-best" class="mt-1 text-sm font-extrabold text-indigo-600">—</div>
+            </div>
+            <div class="rounded-2xl bg-slate-50 p-3">
+              <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Recovered</div>
+              <div id="metric-recovered" class="mt-1 text-2xl font-black text-slate-900">$0</div>
+            </div>
+          </div>
+
+          <div id="empty-state" class="rounded-2xl border border-dashed border-slate-200 p-10 text-center text-sm text-slate-400">
+            Select cards on the left, then expand each card to track benefit usage.
+          </div>
+
+          <div id="chart" class="hidden space-y-3"></div>
+          <div id="benefit-panels" class="mt-5 hidden space-y-3"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="js/card-catalog.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
