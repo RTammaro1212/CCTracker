@@ -31,7 +31,7 @@ const CARD_PRESETS = [
     benefits: [
       { id: 'lyft', name: 'Lyft Credit', cadence: 'monthly', periodsPerYear: 12, valuePerPeriod: 10, maxAnnualValue: 120, note: '$10 monthly credit.' },
       { id: 'doordash', name: 'DoorDash Credits', cadence: 'monthly', periodsPerYear: 12, valuePerPeriod: 25, maxAnnualValue: 300, note: 'Two $10 non-restaurant + one $5 restaurant credit each month.' },
-      { id: 'csr-dashpass', name: 'DashPass Membership Value', cadence: 'monthly', periodsPerYear: 12, valuePerPeriod: 9.99, maxAnnualValue: 119.88, note: 'DashPass value at $9.99/month.' },
+      { id: 'csr-dashpass', name: 'DashPass Membership Value', cadence: 'yearly', periodsPerYear: 1, valuePerPeriod: 96, maxAnnualValue: 96, note: 'Annual DashPass benefit value of $96.' },
       { id: 'tsa', name: 'TSA PreCheck / Global Entry', cadence: 'yearly', periodsPerYear: 1, valuePerPeriod: 120, maxAnnualValue: 120, cooldownYears: 4, note: 'Up to $85/$120 credit; add last-claim year to enforce 4-year cooldown.' },
       { id: 'peloton', name: 'Peloton Credit', cadence: 'monthly', periodsPerYear: 12, valuePerPeriod: 10, maxAnnualValue: 120, note: '$10 monthly credits.' },
       { id: 'apple-tv', name: 'Apple TV+ Credit', cadence: 'yearly', periodsPerYear: 1, valuePerPeriod: 119.88, maxAnnualValue: 119.88, note: 'Annual value target.' },
@@ -97,7 +97,7 @@ const CARD_PRESETS = [
     benefits: [
       { id: 'csp-hotel', name: 'Hotel Credit', cadence: 'yearly', periodsPerYear: 1, valuePerPeriod: 50, maxAnnualValue: 50, note: '$50 annual hotel credit.' },
       { id: 'csp-doordash', name: 'DoorDash Non-Restaurant Credits', cadence: 'monthly', periodsPerYear: 12, valuePerPeriod: 10, maxAnnualValue: 120, note: '$10 monthly non-restaurant credits.' },
-      { id: 'csp-dashpass', name: 'DashPass Membership Value', cadence: 'monthly', periodsPerYear: 12, valuePerPeriod: 9.99, maxAnnualValue: 119.88, note: 'DashPass value at $9.99/month.' },
+      { id: 'csp-dashpass', name: 'DashPass Membership Value', cadence: 'yearly', periodsPerYear: 1, valuePerPeriod: 96, maxAnnualValue: 96, note: 'Annual DashPass benefit value of $96.' },
     ],
     earnRates: [
       { id: 'csp-chase-travel', label: 'Travel purchased through Chase Travel', multiplier: 5 },
@@ -340,19 +340,19 @@ function renderBenefitPanels(cards) {
             </div>
           </summary>
 
-          <div class="mt-4">
-            <div class="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Benefit usage tracking</div>
-            <div class="space-y-2">${benefitRows}</div>
-          </div>
+          <details class="mt-4 rounded-xl border border-slate-100 p-3" open>
+            <summary class="cursor-pointer list-none text-xs font-bold uppercase tracking-wider text-slate-400">Benefit usage tracking</summary>
+            <div class="mt-3 space-y-2">${benefitRows}</div>
+          </details>
 
-          <div class="mt-4 border-t border-slate-100 pt-4">
-            <div class="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Points on spend</div>
-            <div class="mb-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
+          <details class="mt-4 rounded-xl border border-slate-100 p-3" open>
+            <summary class="cursor-pointer list-none text-xs font-bold uppercase tracking-wider text-slate-400">Points on spend</summary>
+            <div class="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
               Enter annual spend manually now. Statement upload mapping can auto-fill these categories in a future iteration.
             </div>
-            <div class="space-y-2">${pointsRows}</div>
+            <div class="mt-3 space-y-2">${pointsRows}</div>
             <div class="mt-2 text-right text-xs font-bold text-slate-500">Total tracked points: <span class="text-indigo-600">${formatPoints(pointsSummary.totalPoints)}</span></div>
-          </div>
+          </details>
         </details>
       `;
     })
