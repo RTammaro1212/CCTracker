@@ -12,6 +12,9 @@ const presetsEl = document.getElementById('card-presets');
 const chartEl = document.getElementById('chart');
 const emptyStateEl = document.getElementById('empty-state');
 const benefitPanelsEl = document.getElementById('benefit-panels');
+const statementCardSelectEl = document.getElementById('statement-card-select');
+const statementUploadEl = document.getElementById('statement-upload');
+const statementUploadStatusEl = document.getElementById('statement-upload-status');
 
 function formatCurrency(value) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: value % 1 === 0 ? 0 : 2 }).format(value);
@@ -116,6 +119,8 @@ function renderPresets() {
 
     presetsEl.appendChild(button);
   });
+
+  refreshStatementUploadCardOptions();
 }
 
 function renderChart(cards) {
@@ -265,7 +270,7 @@ function renderBenefitPanels(cards) {
           <details class="mt-4 rounded-xl border border-slate-100 p-3" open>
             <summary class="cursor-pointer list-none text-xs font-bold uppercase tracking-wider text-slate-400">Points on spend</summary>
             <div class="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
-              Enter annual spend manually now. Statement upload mapping can auto-fill these categories in a future iteration.
+              Enter annual spend manually or use the Statement Upload tile to auto-fill categories from CSV exports.
             </div>
             <div class="mt-3 space-y-2">${pointsRows}</div>
             <div class="mt-2 text-right text-xs font-bold text-slate-500">Total tracked points: <span class="card-total-points text-indigo-600" data-card-id="${card.id}">${formatPoints(pointsSummary.totalPoints)}</span></div>
@@ -335,10 +340,144 @@ function renderBenefitPanels(cards) {
   });
 }
 
+
+function refreshStatementUploadCardOptions() {
+  if (!statementCardSelectEl) return;
+
+  const cards = CARD_PRESETS.filter((card) => selectedCards.has(card.id));
+  const source = cards.length ? cards : CARD_PRESETS;
+  statementCardSelectEl.innerHTML = source
+    .map((card) => `<option value="${card.id}">${card.name}</option>`)
+    .join('');
+  statementCardSelectEl.disabled = source.length === 0;
+}
+
+function parseCSVLine(line) {
+  const out = [];
+  let token = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        token += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      out.push(token.trim());
+      token = '';
+    } else {
+      token += char;
+    }
+  }
+
+  out.push(token.trim());
+  return out;
+}
+
+function normalizeText(textValue) {
+  return String(textValue || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function findOtherRateId(card) {
+  const otherRate = card.earnRates.find((rate) => /all other|everything else/.test(rate.label.toLowerCase()) || /-other$/.test(rate.id));
+  return otherRate ? otherRate.id : null;
+}
+
+function resolveRateForCategory(card, category) {
+  const normalizedCategory = normalizeText(category);
+  if (!normalizedCategory) return findOtherRateId(card);
+
+  let bestRate = null;
+  let bestScore = 0;
+
+  card.earnRates.forEach((rate) => {
+    const label = normalizeText(rate.label);
+    const tokens = label.split(' ').filter((token) => token.length > 3 && !['through', 'eligible', 'purchases', 'purchase', 'booked', 'directly', 'direct'].includes(token));
+    const score = tokens.reduce((sum, token) => (normalizedCategory.includes(token) ? sum + 1 : sum), 0);
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestRate = rate;
+    }
+  });
+
+  if (bestRate && bestScore > 0) return bestRate.id;
+  return findOtherRateId(card);
+}
+
+function applyStatementCsvToCard(card, csvText) {
+  const lines = csvText.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  if (lines.length < 2) return { appliedRows: 0, totalRows: 0 };
+
+  const header = parseCSVLine(lines[0]).map((h) => normalizeText(h));
+  const amountIndex = header.findIndex((h) => ['amount', 'total', 'charge', 'debit'].includes(h));
+  const categoryIndex = header.findIndex((h) => ['category', 'merchant', 'description', 'memo', 'type'].includes(h));
+
+  if (amountIndex === -1 || categoryIndex === -1) return { appliedRows: 0, totalRows: lines.length - 1 };
+
+  let appliedRows = 0;
+
+  for (let i = 1; i < lines.length; i += 1) {
+    const cols = parseCSVLine(lines[i]);
+    const rawAmount = Number(String(cols[amountIndex] || '').replace(/[$,]/g, ''));
+    if (!Number.isFinite(rawAmount) || rawAmount <= 0) continue;
+
+    const rateId = resolveRateForCategory(card, cols[categoryIndex]);
+    if (!rateId) continue;
+
+    spendState[card.id][rateId] = (Number(spendState[card.id][rateId]) || 0) + rawAmount;
+    appliedRows += 1;
+  }
+
+  return { appliedRows, totalRows: lines.length - 1 };
+}
+
+async function handleStatementUpload(event) {
+  const file = event.target.files?.[0];
+  if (!file || !statementUploadStatusEl) return;
+
+  const cardId = statementCardSelectEl?.value;
+  const card = CARD_PRESETS.find((item) => item.id === cardId);
+  if (!card) {
+    statementUploadStatusEl.textContent = 'Select a target card before uploading.';
+    return;
+  }
+
+  ensureCardState(card);
+
+  if (file.type.includes('image') || file.type === 'application/pdf') {
+    statementUploadStatusEl.textContent = `Uploaded ${file.name}. Screenshot/PDF OCR parsing is the next step; CSV is supported now.`;
+    event.target.value = '';
+    return;
+  }
+
+  const textValue = await file.text();
+  const { appliedRows, totalRows } = applyStatementCsvToCard(card, textValue);
+
+  if (!totalRows) {
+    statementUploadStatusEl.textContent = `Uploaded ${file.name}, but no transaction rows were found.`;
+  } else if (!appliedRows) {
+    statementUploadStatusEl.textContent = `Uploaded ${file.name}, but columns were not recognized. Include Amount + Category/Description columns.`;
+  } else {
+    statementUploadStatusEl.textContent = `Applied ${appliedRows}/${totalRows} rows from ${file.name} to ${card.name} spend categories.`;
+  }
+
+  renderAll();
+  event.target.value = '';
+}
+
 function renderAll() {
   const cards = CARD_PRESETS.filter((card) => selectedCards.has(card.id));
   renderChart(cards);
   if (cards.length) renderBenefitPanels(cards);
+}
+
+if (statementUploadEl) {
+  statementUploadEl.addEventListener('change', handleStatementUpload);
 }
 
 document.getElementById('clear-cards').addEventListener('click', () => {
