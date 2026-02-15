@@ -32,7 +32,7 @@ const CARD_PRESETS = [
       { id: 'lyft', name: 'Lyft Credit', cadence: 'monthly', periodsPerYear: 12, valuePerPeriod: 10, maxAnnualValue: 120, note: '$10 monthly credit.' },
       { id: 'doordash', name: 'DoorDash Credits', cadence: 'monthly', periodsPerYear: 12, valuePerPeriod: 25, maxAnnualValue: 300, note: 'Two $10 non-restaurant + one $5 restaurant credit each month.' },
       { id: 'csr-dashpass', name: 'DashPass Membership Value', cadence: 'monthly', periodsPerYear: 12, valuePerPeriod: 9.99, maxAnnualValue: 119.88, note: 'DashPass value at $9.99/month.' },
-      { id: 'tsa', name: 'TSA PreCheck / Global Entry', cadence: 'yearly', periodsPerYear: 1, valuePerPeriod: 120, maxAnnualValue: 120, note: 'Statement credit up to $85/$120.' },
+      { id: 'tsa', name: 'TSA PreCheck / Global Entry', cadence: 'yearly', periodsPerYear: 1, valuePerPeriod: 120, maxAnnualValue: 120, cooldownYears: 4, note: 'Up to $85/$120 credit; add last-claim year to enforce 4-year cooldown.' },
       { id: 'peloton', name: 'Peloton Credit', cadence: 'monthly', periodsPerYear: 12, valuePerPeriod: 10, maxAnnualValue: 120, note: '$10 monthly credits.' },
       { id: 'apple-tv', name: 'Apple TV+ Credit', cadence: 'yearly', periodsPerYear: 1, valuePerPeriod: 119.88, maxAnnualValue: 119.88, note: 'Annual value target.' },
       { id: 'apple-music', name: 'Apple Music Credit', cadence: 'yearly', periodsPerYear: 1, valuePerPeriod: 131.88, maxAnnualValue: 131.88, note: 'Annual value target.' },
@@ -57,8 +57,8 @@ const CARD_PRESETS = [
     color: 'bg-emerald-700',
     benefits: [
       { id: 'vx-travel-credit', name: 'C1 Travel Credit', cadence: 'yearly', periodsPerYear: 1, valuePerPeriod: 300, maxAnnualValue: 300, note: '$300 annual travel credit through Capital One Travel.' },
-      { id: 'vx-global-entry', name: 'Global Entry / TSA PreCheck Credit', cadence: 'yearly', periodsPerYear: 1, valuePerPeriod: 120, maxAnnualValue: 120, note: 'Up to $120 statement credit (typically every 4-5 years; mark only in eligible years).' },
-      { id: 'vx-hotel-credit', name: 'Premier / Lifestyle Collection Hotel Credit', cadence: 'per-stay', periodsPerYear: 6, valuePerPeriod: 75, maxAnnualValue: 600, note: '$50-$100 hotel credit per eligible stay via Premier/Lifestyle Collection.' },
+      { id: 'vx-global-entry', name: 'Global Entry / TSA PreCheck Credit', cadence: 'yearly', periodsPerYear: 1, valuePerPeriod: 120, maxAnnualValue: 120, cooldownYears: 4, note: 'Up to $120 credit; add last-claim year to enforce 4-year cooldown.' },
+      { id: 'vx-hotel-credit', name: 'Premier / Lifestyle Collection Hotel Credit', cadence: 'per-stay', periodsPerYear: 12, valuePerPeriod: 75, minValuePerPeriod: 50, maxValuePerPeriod: 100, variableValue: true, maxAnnualValue: 1200, note: '$50-$100 per eligible stay; set your per-stay value below.' },
     ],
     earnRates: [
       { id: 'vx-hotels-rental-cars-c1', label: 'Hotels & rental cars through Capital One Travel', multiplier: 10 },
@@ -113,6 +113,7 @@ const CARD_PRESETS = [
 const selectedCards = new Set();
 const usageState = {};
 const spendState = {};
+const benefitMetaState = {};
 
 const presetsEl = document.getElementById('card-presets');
 const chartEl = document.getElementById('chart');
@@ -130,14 +131,38 @@ function formatPoints(value) {
 function ensureCardState(card) {
   if (!usageState[card.id]) usageState[card.id] = {};
   if (!spendState[card.id]) spendState[card.id] = {};
+  if (!benefitMetaState[card.id]) benefitMetaState[card.id] = {};
 
   card.benefits.forEach((benefit) => {
     if (usageState[card.id][benefit.id] === undefined) usageState[card.id][benefit.id] = 0;
+    if (!benefitMetaState[card.id][benefit.id]) {
+      benefitMetaState[card.id][benefit.id] = {
+        valuePerPeriod: benefit.valuePerPeriod,
+        lastClaimYear: '',
+      };
+    }
   });
 
   card.earnRates.forEach((rate) => {
     if (spendState[card.id][rate.id] === undefined) spendState[card.id][rate.id] = 0;
   });
+}
+
+function getBenefitValue(benefit, cardId) {
+  if (!benefit.variableValue) return benefit.valuePerPeriod;
+  return Number(benefitMetaState[cardId][benefit.id]?.valuePerPeriod ?? benefit.valuePerPeriod) || 0;
+}
+
+function getBenefitEligibility(benefit, cardId) {
+  if (!benefit.cooldownYears) return { eligible: true, yearsLeft: 0 };
+
+  const currentYear = new Date().getFullYear();
+  const lastClaimYear = Number(benefitMetaState[cardId][benefit.id]?.lastClaimYear || 0);
+  if (!lastClaimYear) return { eligible: true, yearsLeft: 0 };
+
+  const elapsed = currentYear - lastClaimYear;
+  const yearsLeft = Math.max(benefit.cooldownYears - elapsed, 0);
+  return { eligible: yearsLeft === 0, yearsLeft };
 }
 
 function getPointsSummary(card) {
@@ -157,8 +182,11 @@ function getCardRecovery(card) {
   let recovered = 0;
 
   card.benefits.forEach((benefit) => {
+    const { eligible } = getBenefitEligibility(benefit, card.id);
+    if (!eligible) return;
+
     const usedPeriods = usageState[card.id][benefit.id];
-    const rawValue = usedPeriods * benefit.valuePerPeriod;
+    const rawValue = usedPeriods * getBenefitValue(benefit, card.id);
     recovered += Math.min(rawValue, benefit.maxAnnualValue);
   });
 
@@ -251,21 +279,28 @@ function renderBenefitPanels(cards) {
       const benefitRows = hasBenefits
         ? card.benefits
             .map((benefit) => {
-              const usedPeriods = usageState[card.id][benefit.id] || 0;
-              const recoveredValue = Math.min(usedPeriods * benefit.valuePerPeriod, benefit.maxAnnualValue);
+              const { eligible, yearsLeft } = getBenefitEligibility(benefit, card.id);
+              const allowedPeriods = eligible ? benefit.periodsPerYear : 0;
+              const usedPeriods = Math.min(usageState[card.id][benefit.id] || 0, allowedPeriods);
+              const unitValue = getBenefitValue(benefit, card.id);
+              const recoveredValue = Math.min(usedPeriods * unitValue, benefit.maxAnnualValue);
+              const disabledClass = eligible ? '' : 'opacity-50';
               return `
-              <div class="rounded-xl border border-slate-100 p-3">
+              <div class="rounded-xl border border-slate-100 p-3 ${disabledClass}">
                 <div class="flex items-start justify-between gap-3">
                   <div>
                     <div class="text-sm font-bold text-slate-800">${benefit.name}</div>
                     <div class="mt-1 text-xs text-slate-500">${benefit.note}</div>
+                    ${benefit.cooldownYears ? `<div class="mt-1 text-[11px] font-semibold ${eligible ? 'text-emerald-600' : 'text-amber-600'}">${eligible ? 'Eligible this year' : `Eligible in ${yearsLeft} year(s)`}</div>` : ''}
                   </div>
                   <span class="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">${benefit.cadence}</span>
                 </div>
+                ${benefit.variableValue ? `<div class="mt-2 grid grid-cols-2 gap-2"><label class="text-[11px] text-slate-500">Per-stay value</label><input type="number" min="${benefit.minValuePerPeriod}" max="${benefit.maxValuePerPeriod}" step="1" class="benefit-value-input rounded-lg border border-slate-200 px-2 py-1 text-sm font-semibold" data-card-id="${card.id}" data-benefit-id="${benefit.id}" value="${unitValue}" /></div>` : ''}
+                ${benefit.cooldownYears ? `<div class="mt-2 grid grid-cols-2 gap-2"><label class="text-[11px] text-slate-500">Last claim year</label><input type="number" min="2000" max="2100" step="1" class="benefit-last-claim-input rounded-lg border border-slate-200 px-2 py-1 text-sm font-semibold" data-card-id="${card.id}" data-benefit-id="${benefit.id}" value="${benefitMetaState[card.id][benefit.id].lastClaimYear}" placeholder="e.g. 2023" /></div>` : ''}
                 <div class="mt-3 flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <button class="usage-btn rounded-lg border border-slate-200 px-2 py-1 text-sm font-bold text-slate-600" data-card-id="${card.id}" data-benefit-id="${benefit.id}" data-delta="-1">−</button>
-                    <div class="min-w-[92px] text-center text-sm font-semibold text-slate-700">${usedPeriods}/${benefit.periodsPerYear} used</div>
+                    <div class="min-w-[92px] text-center text-sm font-semibold text-slate-700">${usedPeriods}/${allowedPeriods} used</div>
                     <button class="usage-btn rounded-lg border border-slate-200 px-2 py-1 text-sm font-bold text-slate-600" data-card-id="${card.id}" data-benefit-id="${benefit.id}" data-delta="1">+</button>
                   </div>
                   <div class="text-sm font-bold text-indigo-600">${formatCurrency(recoveredValue)}</div>
@@ -331,8 +366,32 @@ function renderBenefitPanels(cards) {
 
       const card = CARD_PRESETS.find((item) => item.id === cardId);
       const benefit = card.benefits.find((item) => item.id === benefitId);
+      const { eligible } = getBenefitEligibility(benefit, cardId);
+      const maxPeriods = eligible ? benefit.periodsPerYear : 0;
       const current = usageState[cardId][benefitId] || 0;
-      usageState[cardId][benefitId] = Math.max(0, Math.min(benefit.periodsPerYear, current + delta));
+      usageState[cardId][benefitId] = Math.max(0, Math.min(maxPeriods, current + delta));
+      renderAll();
+    });
+  });
+
+  document.querySelectorAll('.benefit-value-input').forEach((input) => {
+    input.addEventListener('input', () => {
+      const cardId = input.dataset.cardId;
+      const benefitId = input.dataset.benefitId;
+      const card = CARD_PRESETS.find((item) => item.id === cardId);
+      const benefit = card.benefits.find((item) => item.id === benefitId);
+      const value = Math.max(benefit.minValuePerPeriod, Math.min(benefit.maxValuePerPeriod, Number(input.value) || benefit.valuePerPeriod));
+      benefitMetaState[cardId][benefitId].valuePerPeriod = value;
+      renderAll();
+    });
+  });
+
+  document.querySelectorAll('.benefit-last-claim-input').forEach((input) => {
+    input.addEventListener('input', () => {
+      const cardId = input.dataset.cardId;
+      const benefitId = input.dataset.benefitId;
+      const year = Number(input.value) || '';
+      benefitMetaState[cardId][benefitId].lastClaimYear = year;
       renderAll();
     });
   });
