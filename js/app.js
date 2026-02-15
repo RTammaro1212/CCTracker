@@ -60,7 +60,11 @@ function formatCurrency(value) {
 }
 
 function formatPoints(value) {
-  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value);
+  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+}
+
+function formatRoundedPoints(value) {
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.round(value));
 }
 
 
@@ -137,6 +141,26 @@ function getPointsSummary(card) {
   });
 
   return { totalPoints };
+}
+
+function getPointsBreakdown(card) {
+  ensureCardState(card);
+  const byMultiplier = {};
+
+  card.earnRates.forEach((rate) => {
+    const annualSpend = Number(spendState[card.id][rate.id] || 0);
+    const points = annualSpend * rate.multiplier;
+    if (!byMultiplier[rate.multiplier]) byMultiplier[rate.multiplier] = 0;
+    byMultiplier[rate.multiplier] += points;
+  });
+
+  const entries = Object.entries(byMultiplier)
+    .map(([multiplier, points]) => ({ multiplier: Number(multiplier), points }))
+    .filter((entry) => entry.points > 0)
+    .sort((a, b) => b.multiplier - a.multiplier);
+
+  const totalPoints = entries.reduce((sum, entry) => sum + entry.points, 0);
+  return { totalPoints, entries };
 }
 
 function getCardRecovery(card) {
@@ -311,6 +335,19 @@ function renderChart(cards) {
     .map(({ card, recovered, feeRecoveredPct, net, totalPoints }) => {
       const safeWidth = Math.max(Math.min(feeRecoveredPct, 100), 2);
       const isPositive = net >= 0;
+      const pointsBreakdown = getPointsBreakdown(card);
+      const pointColors = ['bg-violet-500', 'bg-indigo-500', 'bg-sky-500', 'bg-cyan-500', 'bg-emerald-500'];
+      const pointsBar = pointsBreakdown.totalPoints > 0
+        ? pointsBreakdown.entries.map((entry, index) => {
+            const width = (entry.points / pointsBreakdown.totalPoints) * 100;
+            const color = pointColors[index % pointColors.length];
+            return `<div class="h-2.5 ${color}" style="width:${width}%" title="${entry.multiplier}x: ${formatPoints(entry.points)} pts"></div>`;
+          }).join('')
+        : '<div class="h-2.5 w-full bg-slate-200"></div>';
+      const pointsLegend = pointsBreakdown.totalPoints > 0
+        ? pointsBreakdown.entries.map((entry) => `<span>${entry.multiplier}x ${formatRoundedPoints(entry.points)}</span>`).join(' · ')
+        : 'No points yet';
+
       return `
         <div class="rounded-xl border border-slate-100 p-3">
           <div class="mb-2 flex items-center justify-between text-xs">
@@ -321,7 +358,9 @@ function renderChart(cards) {
             <div class="bar-fill h-3 rounded-full ${isPositive ? 'bg-indigo-500' : 'bg-amber-500'}" style="width:${safeWidth}%"></div>
           </div>
           <div class="mt-1 text-[11px] text-slate-400">${formatCurrency(recovered)} recovered of ${formatCurrency(card.annualFee)} fee (${feeRecoveredPct.toFixed(0)}%)</div>
-          <div class="mt-1 text-[11px] font-semibold text-slate-500">${formatPoints(totalPoints)} points tracked</div>
+          <div class="mt-2 flex overflow-hidden rounded-full bg-slate-100">${pointsBar}</div>
+          <div class="mt-1 text-[11px] font-semibold text-slate-500">${formatRoundedPoints(totalPoints)} points total</div>
+          <div class="mt-1 text-[10px] text-slate-400">${pointsLegend}</div>
         </div>
       `;
     })
@@ -408,7 +447,7 @@ function renderBenefitPanels(cards) {
                 </div>
                 <div class="mt-1 text-xs text-slate-500">${rate.label}</div>
                 <div class="mt-2 grid grid-cols-2 gap-2">
-                  <input type="number" min="0" step="50" class="spend-input rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold" data-card-id="${card.id}" data-rate-id="${rate.id}" value="${spend}" />
+                  <input type="number" min="0" step="0.01" class="spend-input rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold" data-card-id="${card.id}" data-rate-id="${rate.id}" value="${Number(spend).toFixed(2)}" />
                   <div class="rate-points-value rounded-lg bg-slate-50 px-3 py-2 text-right text-sm font-bold text-indigo-600" data-card-id="${card.id}" data-rate-id="${rate.id}">${formatPoints(points)} pts</div>
                 </div>
               </div>`;
