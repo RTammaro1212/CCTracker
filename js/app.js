@@ -7,6 +7,8 @@ const selectedCards = new Set();
 const usageState = {};
 const spendState = {};
 const benefitMetaState = {};
+let isCardPickerOpen = false;
+let activeBrand = '';
 
 const presetsEl = document.getElementById('card-presets');
 const chartEl = document.getElementById('chart');
@@ -15,6 +17,11 @@ const benefitPanelsEl = document.getElementById('benefit-panels');
 const statementCardSelectEl = document.getElementById('statement-card-select');
 const statementUploadEl = document.getElementById('statement-upload');
 const statementUploadStatusEl = document.getElementById('statement-upload-status');
+const addCardsBtnEl = document.getElementById('add-cards-btn');
+const cardPickerPanelEl = document.getElementById('card-picker-panel');
+const brandOptionsEl = document.getElementById('brand-options');
+const brandCardOptionsEl = document.getElementById('brand-card-options');
+const closeCardPickerEl = document.getElementById('close-card-picker');
 
 function formatCurrency(value) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: value % 1 === 0 ? 0 : 2 }).format(value);
@@ -91,34 +98,129 @@ function getCardRecovery(card) {
   return { recovered, feeRecoveredPct, net: recovered - card.annualFee, totalPoints };
 }
 
-function renderPresets() {
-  presetsEl.innerHTML = '';
-  CARD_PRESETS.forEach((card) => {
-    const active = selectedCards.has(card.id);
-    const button = document.createElement('button');
-    button.className = `rounded-2xl border p-3 text-left transition-all ${active ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-slate-50'}`;
-    button.innerHTML = `
-      <div class="mb-2 flex items-center gap-2">
-        <div class="${card.color} flex h-8 w-8 items-center justify-center rounded-lg text-[10px] font-bold uppercase text-white">${card.issuer.slice(0, 2)}</div>
-        <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400">${card.issuer}</div>
-      </div>
-      <div class="text-sm font-bold text-slate-900 leading-tight">${card.name}</div>
-      <div class="mt-1 text-xs text-slate-500">Fee ${formatCurrency(card.annualFee)}</div>
-    `;
+function getAvailableBrands() {
+  return Array.from(new Set(CARD_PRESETS.map((card) => card.issuer)));
+}
 
-    button.onclick = () => {
+function renderBrandOptions() {
+  if (!brandOptionsEl) return;
+
+  const brands = getAvailableBrands();
+  if (!activeBrand && brands.length) activeBrand = brands[0];
+
+  brandOptionsEl.innerHTML = brands
+    .map((brand) => {
+      const active = brand === activeBrand;
+      return `<button class="brand-filter inline-flex min-h-[38px] items-center justify-center rounded-xl border px-2.5 py-2 text-xs font-bold leading-none transition-colors ${active ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300'}" data-brand="${brand}">${brand}</button>`;
+    })
+    .join('');
+
+  document.querySelectorAll('.brand-filter').forEach((button) => {
+    button.addEventListener('click', () => {
+      activeBrand = button.dataset.brand;
+      renderBrandOptions();
+      renderBrandCardOptions();
+    });
+  });
+}
+
+function renderBrandCardOptions() {
+  if (!brandCardOptionsEl) return;
+
+  const cards = CARD_PRESETS.filter((card) => card.issuer === activeBrand);
+  brandCardOptionsEl.innerHTML = cards
+    .map((card) => {
+      const selected = selectedCards.has(card.id);
+      return `<button class="brand-card-option rounded-xl border p-3 text-left transition-all ${selected ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-300'}" data-card-id="${card.id}">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <div class="text-sm font-bold text-slate-800">${card.name}</div>
+            <div class="text-xs text-slate-500">${formatCurrency(card.annualFee)} annual fee</div>
+          </div>
+          <div class="text-xs font-bold ${selected ? 'text-indigo-600' : 'text-slate-400'}">${selected ? 'Selected' : 'Add'}</div>
+        </div>
+      </button>`;
+    })
+    .join('');
+
+  document.querySelectorAll('.brand-card-option').forEach((button) => {
+    button.addEventListener('click', () => {
+      const cardId = button.dataset.cardId;
+      const card = CARD_PRESETS.find((item) => item.id === cardId);
+      if (!card) return;
+
       if (selectedCards.has(card.id)) {
         selectedCards.delete(card.id);
       } else {
         selectedCards.add(card.id);
         ensureCardState(card);
       }
+
       renderPresets();
       renderAll();
-    };
-
-    presetsEl.appendChild(button);
+      renderBrandCardOptions();
+    });
   });
+}
+
+function openCardPicker() {
+  isCardPickerOpen = true;
+  if (cardPickerPanelEl) cardPickerPanelEl.classList.remove('hidden');
+  renderBrandOptions();
+  renderBrandCardOptions();
+}
+
+function closeCardPicker() {
+  isCardPickerOpen = false;
+  if (cardPickerPanelEl) cardPickerPanelEl.classList.add('hidden');
+}
+
+function renderPresets() {
+  presetsEl.innerHTML = '';
+
+  const selected = CARD_PRESETS.filter((card) => selectedCards.has(card.id));
+  const showCompactAdd = selected.length > 0;
+
+  if (addCardsBtnEl) {
+    addCardsBtnEl.classList.toggle('hidden', !showCompactAdd);
+    addCardsBtnEl.classList.toggle('inline-flex', showCompactAdd);
+  }
+
+  if (!selected.length) {
+    const addTile = document.createElement('button');
+    addTile.className = 'col-span-2 flex min-h-[118px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-indigo-300 bg-indigo-50/70 p-3 text-center transition-colors hover:bg-indigo-100';
+    addTile.innerHTML = `
+      <div class="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl font-bold text-indigo-600">+</div>
+      <div class="text-sm font-bold text-indigo-700">Add your first card</div>
+      <div class="text-xs text-indigo-500">Tap to browse card brands</div>
+    `;
+    addTile.addEventListener('click', openCardPicker);
+    presetsEl.appendChild(addTile);
+  } else {
+    selected.forEach((card) => {
+      const button = document.createElement('button');
+      button.className = 'rounded-2xl border border-indigo-200 bg-indigo-50/60 p-3 text-left transition-colors hover:border-red-300 hover:bg-red-50';
+      button.innerHTML = `
+        <div class="mb-2 flex items-center gap-2">
+          <div class="${card.color} flex h-8 w-8 items-center justify-center rounded-lg text-[10px] font-bold uppercase text-white">${card.issuer.slice(0, 2)}</div>
+          <div class="pt-0.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">${card.issuer}</div>
+        </div>
+        <div class="text-sm font-bold leading-tight text-slate-900">${card.name}</div>
+        <div class="mt-1 text-xs font-medium text-slate-500">Click to remove</div>
+      `;
+
+      button.addEventListener('click', () => {
+        selectedCards.delete(card.id);
+        renderPresets();
+        renderAll();
+      });
+      presetsEl.appendChild(button);
+    });
+  }
+
+  if (!isCardPickerOpen && cardPickerPanelEl) {
+    cardPickerPanelEl.classList.add('hidden');
+  }
 
   refreshStatementUploadCardOptions();
 }
@@ -587,11 +689,8 @@ if (statementUploadEl) {
   statementUploadEl.addEventListener('change', handleStatementUpload);
 }
 
-document.getElementById('clear-cards').addEventListener('click', () => {
-  selectedCards.clear();
-  renderPresets();
-  renderAll();
-});
+if (addCardsBtnEl) addCardsBtnEl.addEventListener('click', openCardPicker);
+if (closeCardPickerEl) closeCardPickerEl.addEventListener('click', closeCardPicker);
 
 renderPresets();
 renderAll();

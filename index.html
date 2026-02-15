@@ -45,11 +45,23 @@
 
       <section class="grid gap-6 lg:grid-cols-5">
         <div class="rounded-3xl bg-white p-5 shadow-card lg:col-span-2">
-          <div class="mb-4 flex items-center justify-between">
-            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400">Quick Add Cards</h2>
-            <button id="clear-cards" class="text-xs font-semibold text-slate-500 hover:text-red-500">Clear</button>
+          <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400">My Cards</h2>
+              <button id="add-cards-btn" class="hidden h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-base font-bold leading-none text-slate-500 transition-colors hover:border-indigo-300 hover:text-indigo-600" title="Add cards" aria-label="Add cards">+</button>
+            </div>
+            <span class="text-xs font-semibold text-slate-400">Click a card tile to remove</span>
           </div>
           <div id="card-presets" class="grid grid-cols-2 gap-2"></div>
+
+          <div id="card-picker-panel" class="mt-3 hidden rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <div class="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Choose card brand</div>
+            <div id="brand-options" class="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3"></div>
+            <div id="brand-card-options" class="grid grid-cols-1 gap-2"></div>
+            <div class="mt-3 flex justify-end">
+              <button id="close-card-picker" class="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white">Done</button>
+            </div>
+          </div>
 
           <div class="mt-5 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-4">
             <p class="text-sm font-semibold text-slate-600">Track usage, not just ownership</p>
