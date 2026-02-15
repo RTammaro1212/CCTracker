@@ -324,7 +324,7 @@ function renderBenefitPanels(cards) {
                 <div class="mt-1 text-xs text-slate-500">${rate.label}</div>
                 <div class="mt-2 grid grid-cols-2 gap-2">
                   <input type="number" min="0" step="50" class="spend-input rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold" data-card-id="${card.id}" data-rate-id="${rate.id}" value="${spend}" />
-                  <div class="rounded-lg bg-slate-50 px-3 py-2 text-right text-sm font-bold text-indigo-600">${formatPoints(points)} pts</div>
+                  <div class="rate-points-value rounded-lg bg-slate-50 px-3 py-2 text-right text-sm font-bold text-indigo-600" data-card-id="${card.id}" data-rate-id="${rate.id}">${formatPoints(points)} pts</div>
                 </div>
               </div>`;
             })
@@ -351,7 +351,7 @@ function renderBenefitPanels(cards) {
               Enter annual spend manually now. Statement upload mapping can auto-fill these categories in a future iteration.
             </div>
             <div class="mt-3 space-y-2">${pointsRows}</div>
-            <div class="mt-2 text-right text-xs font-bold text-slate-500">Total tracked points: <span class="text-indigo-600">${formatPoints(pointsSummary.totalPoints)}</span></div>
+            <div class="mt-2 text-right text-xs font-bold text-slate-500">Total tracked points: <span class="card-total-points text-indigo-600" data-card-id="${card.id}">${formatPoints(pointsSummary.totalPoints)}</span></div>
           </details>
         </details>
       `;
@@ -401,7 +401,19 @@ function renderBenefitPanels(cards) {
       const cardId = input.dataset.cardId;
       const rateId = input.dataset.rateId;
       spendState[cardId][rateId] = Math.max(0, Number(input.value) || 0);
-      renderAll();
+
+      const card = CARD_PRESETS.find((item) => item.id === cardId);
+      const rate = card.earnRates.find((item) => item.id === rateId);
+      const rowPoints = (spendState[cardId][rateId] || 0) * rate.multiplier;
+      const rowPointsEl = document.querySelector(`.rate-points-value[data-card-id="${cardId}"][data-rate-id="${rateId}"]`);
+      if (rowPointsEl) rowPointsEl.textContent = `${formatPoints(rowPoints)} pts`;
+
+      const totalPoints = getPointsSummary(card).totalPoints;
+      const totalPointsEl = document.querySelector(`.card-total-points[data-card-id="${cardId}"]`);
+      if (totalPointsEl) totalPointsEl.textContent = formatPoints(totalPoints);
+
+      const cards = CARD_PRESETS.filter((item) => selectedCards.has(item.id));
+      renderChart(cards);
     });
   });
 }
