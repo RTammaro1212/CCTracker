@@ -31,6 +31,38 @@ Each preset includes:
 
 ---
 
+## Card Data Architecture (Best Practice for 50+ Cards)
+
+Yes — there is a better long-term architecture than keeping all card definitions embedded in UI logic.
+
+### What this repo now does
+
+- Card definitions live in `js/card-catalog.js` as a dedicated catalog payload.
+- UI and interaction logic live in `js/app.js`.
+- `index.html` loads the catalog first, then app logic.
+
+This separation improves maintainability and avoids repeatedly touching rendering code when adding cards.
+
+### Recommended next step (production-oriented)
+
+When you move beyond MVP:
+
+1. **Store card data in versioned JSON** (e.g., `data/cards.v1.json`) and fetch it at runtime.
+2. **Validate schema** before render (required fields like `id`, `annualFee`, `benefits`, `earnRates`).
+3. **Add a normalized cadence model** (`monthly`, `quarterly`, `yearly`, `cooldownYears`) so calculations stay consistent.
+4. **Split static issuer metadata** (logos, colors, display names) from benefit/rules data.
+5. **Use lightweight caching** (`Cache-Control` + ETag/CDN) to keep load times fast as catalog grows.
+6. **Keep user state separate** from catalog (`localStorage` now, backend later) so catalog updates don't overwrite usage history.
+
+### Why this scales better
+
+- Faster card additions (data-only change).
+- Lower regression risk (UI code changes less often).
+- Better load performance (cacheable static catalog).
+- Cleaner path to API-backed updates later.
+
+---
+
 ## Special Modeling Included
 
 To improve realism in benefit calculations, the app includes:
@@ -62,7 +94,8 @@ Then open:
 
 - `index.html` — page layout and containers
 - `styles.css` — small custom styles on top of Tailwind utility classes
-- `js/app.js` — card data model + rendering + interaction logic
+- `js/card-catalog.js` — card catalog payload (presets, benefits, earn rates)
+- `js/app.js` — rendering, state, and interaction logic
 
 ---
 
