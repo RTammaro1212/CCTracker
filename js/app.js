@@ -12,6 +12,13 @@ const selectedCards = new Set(Array.isArray(initialState?.selectedCards) ? initi
 const usageState = initialState?.usageState && typeof initialState.usageState === 'object' ? initialState.usageState : {};
 const spendState = initialState?.spendState && typeof initialState.spendState === 'object' ? initialState.spendState : {};
 const benefitMetaState = initialState?.benefitMetaState && typeof initialState.benefitMetaState === 'object' ? initialState.benefitMetaState : {};
+const userSettings = initialState?.userSettings && typeof initialState.userSettings === 'object'
+  ? {
+      displayName: initialState.userSettings.displayName || '',
+      monthlyRewardsGoal: Number(initialState.userSettings.monthlyRewardsGoal) || 0,
+      localOnly: initialState.userSettings.localOnly !== false,
+    }
+  : { displayName: '', monthlyRewardsGoal: 0, localOnly: true };
 let isCardPickerOpen = false;
 let activeBrand = '';
 
@@ -22,6 +29,7 @@ function persistState() {
     usageState,
     spendState,
     benefitMetaState,
+    userSettings,
   });
 }
 
@@ -37,6 +45,15 @@ const cardPickerPanelEl = document.getElementById('card-picker-panel');
 const brandOptionsEl = document.getElementById('brand-options');
 const brandCardOptionsEl = document.getElementById('brand-card-options');
 const closeCardPickerEl = document.getElementById('close-card-picker');
+const openSettingsEl = document.getElementById('open-settings');
+const closeSettingsEl = document.getElementById('close-settings');
+const settingsModalEl = document.getElementById('settings-modal');
+const settingsBackdropEl = document.getElementById('settings-backdrop');
+const settingsFormEl = document.getElementById('settings-form');
+const settingsNameEl = document.getElementById('settings-name');
+const settingsGoalEl = document.getElementById('settings-goal');
+const settingsLocalOnlyEl = document.getElementById('settings-local-only');
+const settingsSummaryEl = document.getElementById('settings-summary');
 
 function formatCurrency(value) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: value % 1 === 0 ? 0 : 2 }).format(value);
@@ -44,6 +61,33 @@ function formatCurrency(value) {
 
 function formatPoints(value) {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value);
+}
+
+
+function renderSettingsSummary() {
+  if (!settingsSummaryEl) return;
+
+  const namePart = userSettings.displayName ? `Welcome back, ${userSettings.displayName}.` : 'Set your profile in Settings.';
+  const goalPart = userSettings.monthlyRewardsGoal > 0 ? `Monthly goal: ${formatCurrency(userSettings.monthlyRewardsGoal)}.` : 'No monthly rewards goal set yet.';
+  settingsSummaryEl.textContent = `${namePart} ${goalPart}`;
+}
+
+function openSettingsModal() {
+  if (!settingsModalEl || !settingsBackdropEl) return;
+  settingsModalEl.classList.remove('hidden');
+  settingsModalEl.classList.add('flex');
+  settingsBackdropEl.classList.remove('hidden');
+
+  if (settingsNameEl) settingsNameEl.value = userSettings.displayName || '';
+  if (settingsGoalEl) settingsGoalEl.value = userSettings.monthlyRewardsGoal || '';
+  if (settingsLocalOnlyEl) settingsLocalOnlyEl.checked = userSettings.localOnly;
+}
+
+function closeSettingsModal() {
+  if (!settingsModalEl || !settingsBackdropEl) return;
+  settingsModalEl.classList.add('hidden');
+  settingsModalEl.classList.remove('flex');
+  settingsBackdropEl.classList.add('hidden');
 }
 
 function ensureCardState(card) {
@@ -714,5 +758,21 @@ if (statementUploadEl) {
 if (addCardsBtnEl) addCardsBtnEl.addEventListener('click', openCardPicker);
 if (closeCardPickerEl) closeCardPickerEl.addEventListener('click', closeCardPicker);
 
+if (openSettingsEl) openSettingsEl.addEventListener('click', openSettingsModal);
+if (closeSettingsEl) closeSettingsEl.addEventListener('click', closeSettingsModal);
+if (settingsBackdropEl) settingsBackdropEl.addEventListener('click', closeSettingsModal);
+if (settingsFormEl) {
+  settingsFormEl.addEventListener('submit', (event) => {
+    event.preventDefault();
+    userSettings.displayName = (settingsNameEl?.value || '').trim();
+    userSettings.monthlyRewardsGoal = Math.max(0, Number(settingsGoalEl?.value) || 0);
+    userSettings.localOnly = Boolean(settingsLocalOnlyEl?.checked);
+    persistState();
+    renderSettingsSummary();
+    closeSettingsModal();
+  });
+}
+
+renderSettingsSummary();
 renderPresets();
 renderAll();

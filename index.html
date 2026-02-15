@@ -32,8 +32,11 @@
   <body class="bg-[#F8F9FB] font-sans text-slate-800">
     <main class="mx-auto min-h-screen w-full max-w-6xl px-4 pb-16 pt-8 sm:px-6 lg:px-8">
       <section class="mb-8 rounded-3xl bg-white p-6 shadow-card sm:p-8">
-        <div class="mb-4 inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-indigo-700">
-          Home MVP
+        <div class="mb-4 flex items-start justify-between gap-3 sm:items-center">
+          <div class="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-indigo-700">
+            Home MVP
+          </div>
+          <button id="open-settings" class="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-base text-slate-600 shadow-sm transition-colors hover:border-indigo-300 hover:text-indigo-700 sm:mt-0" aria-label="Open settings" title="Settings">⚙</button>
         </div>
         <h1 class="text-3xl font-black text-slate-900 sm:text-4xl">
           Track your card benefits against annual fees.
@@ -41,6 +44,7 @@
         <p class="mt-3 max-w-3xl text-sm text-slate-500 sm:text-base">
           Start with popular cards, check off benefit usage, and track points earned from spend categories. Instantly see how much of each annual fee you’ve earned back.
         </p>
+        <p id="settings-summary" class="mt-2 text-xs font-semibold text-slate-400"></p>
       </section>
 
       <section class="grid gap-6 lg:grid-cols-5">
@@ -50,7 +54,7 @@
               <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400">My Cards</h2>
               <button id="add-cards-btn" class="hidden h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-base font-bold leading-none text-slate-500 transition-colors hover:border-indigo-300 hover:text-indigo-600" title="Add cards" aria-label="Add cards">+</button>
             </div>
-            <span class="text-xs font-semibold text-slate-400">Click a card tile to remove</span>
+            <span class="text-right text-xs font-semibold leading-tight text-slate-400">Click a card tile to remove</span>
           </div>
           <div id="card-presets" class="grid grid-cols-2 gap-2"></div>
 
@@ -88,7 +92,7 @@
         </div>
 
         <div class="rounded-3xl bg-white p-5 shadow-card lg:col-span-3">
-          <div class="mb-4 flex items-center justify-between">
+          <div class="mb-5 flex items-center justify-between">
             <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400">Annual Fee Recovery Snapshot</h2>
             <div class="text-xs font-semibold text-slate-500">Based on checked benefits</div>
           </div>
@@ -118,6 +122,31 @@
       </section>
     </main>
 
+    <div id="settings-backdrop" class="fixed inset-0 z-40 hidden bg-slate-900/30"></div>
+    <div id="settings-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
+      <div class="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
+        <div class="mb-4 flex items-center justify-between">
+          <h3 class="text-base font-bold text-slate-900">User Settings</h3>
+          <button id="close-settings" class="inline-flex h-8 items-center rounded-full border border-slate-200 px-3 text-xs font-bold text-slate-500">Close</button>
+        </div>
+        <form id="settings-form" class="space-y-4">
+          <div>
+            <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500" for="settings-name">Display name</label>
+            <input id="settings-name" type="text" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800" placeholder="Your name" />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500" for="settings-goal">Monthly rewards goal ($)</label>
+            <input id="settings-goal" type="number" min="0" step="10" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800" placeholder="300" />
+          </div>
+          <label class="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium leading-tight text-slate-600">
+            <input id="settings-local-only" type="checkbox" class="h-4 w-4" checked />
+            Keep my data on this device only
+          </label>
+          <p class="text-xs text-slate-400">You can use this app without a backend (local storage). A backend is only needed for multi-device sync, sign-in, and secure account storage.</p>
+          <button type="submit" class="w-full rounded-xl bg-slate-900 px-3 py-2 text-sm font-bold text-white">Save settings</button>
+        </form>
+      </div>
+    </div>
     <script src="js/card-catalog.js"></script>
     <script src="js/catalog-validation.js"></script>
     <script src="js/state.js"></script>

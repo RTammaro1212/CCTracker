@@ -10,6 +10,9 @@ The current MVP focuses on two workflows:
 2. **Points-on-spend tracking**
    - Enter annual spend by earning category.
    - Estimate tracked points/miles based on each card's multiplier rules.
+3. **User settings (local-first)**
+   - Save profile preferences like display name and rewards goals.
+   - Keep data on device by default (backend optional for sync/login).
 
 ---
 
